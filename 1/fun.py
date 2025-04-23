@@ -1,3 +1,4 @@
+#Julia Dobroszek Malwina Wodnicke
 import numpy as np
 
 H = np.array([

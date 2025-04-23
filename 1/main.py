@@ -1,3 +1,4 @@
+#Julia Dobroszek Malwina Wodnicke
 import sys
 import fun
 
