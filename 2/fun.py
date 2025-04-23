@@ -63,7 +63,7 @@ def wyborOperacji():
     return menu
 
 def sumaKontrolna(blok):
-    suma = sum(blok) #dodajemy wartości ASCII każdego znaku w bloku
+    suma = sum(blok)
 
     while suma > 256: #tworzenie sumy kontrolnej, jeśli suma znaków > 256 to odejmujemy 256
         suma -= 256
@@ -89,14 +89,11 @@ def algorytmCRC(blok):
 
     return crc
 
-def padding(wiadomosc):
-    bloki = len(wiadomosc) % 128
-
-    if bloki != 0:
-        dopelnienie = 128 - bloki
-        wiadomosc += ' ' * dopelnienie
-
-    return wiadomosc
+def padding(dane_binarne):
+    blok_size = 128
+    dlugosc = len(dane_binarne)
+    dopelnienie = (blok_size - (dlugosc % blok_size)) % blok_size
+    return dane_binarne + bytes([0] * dopelnienie)
 
 # funkcja podziału wiadomości na bloki o rozmiarze 128 bajtow
 def podzielWiadomosc(wiadomosc):

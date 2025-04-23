@@ -1,109 +1,77 @@
 import time
 import fun
 
+
 def odbierzWiadomosc(port):
-    czas = time.time()
-    odebranySygnal = None
-    wybor = fun.wyborSumyKontrolnej()
-
-    def rozpocznijTransmisję():
-        if wybor:
-            port.write(fun.NAK)
-        else:
-            port.write(fun.C)
-
-    def zweryfikujSumęKontrolną(rs):
-        if wybor:
-            suma = port.read(1)
-            return suma == fun.sumaKontrolna(rs).to_bytes(1)
-
-        else:
-            suma = port.read(2)
-            return suma == fun.algorytmCRC(rs).to_bytes(2)
-
-    while time.time() - czas < 60:
-        rozpocznijTransmisję()
-        time.sleep(10)
-        if port.in_waiting > 0:
-            zawartoscBufora = port.read(1)
-            if zawartoscBufora == fun.SOH:
-                odebranySygnal = zawartoscBufora
-                break
-
-            elif zawartoscBufora == fun.CAN:
-                print("Transmisja została anulowana przez nadawcę!")
-                port.write(fun.CAN)
-                port.write(fun.CAN)
-                return
-
-            else:
-                print("Anuluję transmisję, otrzymano nieoczekiwany komunikat: ", fun.znakiSterujace.get(zawartoscBufora, str(zawartoscBufora)))
-                port.write(fun.CAN)
-                port.write(fun.CAN)
-                return
-
-    if odebranySygnal is None:
-        print("Nie otrzymano oczekiwanej odpowiedzi SOH, zakończono oczekiwanie.")
-        return
-
-    else:
-        print("Otrzymano komunikat: ", fun.znakiSterujace.get(odebranySygnal, str(odebranySygnal)))
-
-    numerBloku = 1
+    nazwa_pliku = input("Podaj nazwę pliku do zapisu z rozszerzeniem: ")
+    czas_start = time.time()
+    wybor_sumy = fun.wyborSumyKontrolnej()
+    odebrane_dane = bytearray()  # Przechowujemy dane binarne
+    numer_bloku = 1
     blad = [False, ""]
 
-    while True:
+    def zweryfikuj_sume(blok_danych):
+        if wybor_sumy:
+            suma_odebrana = port.read(1)
+            return suma_odebrana == fun.sumaKontrolna(blok_danych).to_bytes(1, 'big')
+        else:
+            crc_odebrane = port.read(2)
+            return crc_odebrane == fun.algorytmCRC(blok_danych).to_bytes(2, 'big')
+
+    def rozpocznij_transmisje():
+        port.write(fun.NAK if wybor_sumy else fun.C)
+
+    rozpocznij_transmisje()
+
+    while time.time() - czas_start < 60:  # 60s timeout
         if port.in_waiting > 0:
-            if odebranySygnal != fun.SOH:
-                odebranySygnal = port.read(1)
-                print("Otrzymano komunikat: ", fun.znakiSterujace.get(odebranySygnal, str(odebranySygnal)))
-                if odebranySygnal == fun.EOT:
-                    break
+            sygnal = port.read(1)
 
-                elif odebranySygnal == fun.CAN:
-                    blad = [True, "Nadawca anulował transmisję!"]
-                    break
+            if sygnal == fun.SOH:  # Początek bloku
+                # Odczytaj numer bloku i jego dopełnienie
+                nr_bloku = int.from_bytes(port.read(1), 'big')
+                dopelnienie = int.from_bytes(port.read(1), 'big')
 
-                elif odebranySygnal != fun.SOH:
-                    blad[1] = "Nie otrzymano oczekiwanego komunikatu SOH."
-                    break
+                # Sprawdź poprawność numeru bloku
+                if nr_bloku != numer_bloku % 256:
+                    blad = [True, f"Błędny numer bloku: {nr_bloku} (oczekiwano {numer_bloku % 256})"]
+                    port.write(fun.NAK)
+                    continue
 
+                # Odczytaj dane (128 bajtów)
+                dane_bloku = port.read(128)
+                odebrane_dane.extend(dane_bloku)
+
+                # Weryfikacja sumy kontrolnej
+                if zweryfikuj_sume(dane_bloku):
+                    port.write(fun.ACK)
+                    numer_bloku += 1
                 else:
-                    blad[0] = False  # reset flagi błędu
+                    port.write(fun.NAK)
 
-            odebranySygnal = port.read(1)  # odczytujemy 1 bajt
-
-            if odebranySygnal != numerBloku.to_bytes(1):  # weryfikujemy informacje o numerze bloku
-                blad = [True, "Nieprawidłowy numer bloku!"]
+            elif sygnal == fun.EOT:  # Koniec transmisji
+                port.write(fun.ACK)
                 break
 
-            odebranySygnal = port.read(1)  # odczytujemy numer dopełnienia
-
-            if odebranySygnal != (255 - numerBloku).to_bytes(1):
-                blad = [True, "Nieprawidłowa liczba dopełnienia"]
+            elif sygnal == fun.CAN:  # Anulowanie
+                blad = [True, "Nadawca anulował transmisję"]
                 break
-
-            odebranySygnal = port.read(128)
-            print(str(numerBloku) + " blok - otrzymane dane: " + odebranySygnal.decode('ascii', errors='ignore'))
-
-            if zweryfikujSumęKontrolną(odebranySygnal) is False:
-                blad = [True, "Nieprawdiłowa suma kontrolna/CRC"]
-
-            if blad[0]:
-                print(blad[1] + " - wysyłam komunikat NAK")
-                port.write(fun.NAK)
 
             else:
-                print("Suma kontrolna/CRC się zgadza - wysyłam komunikat ACK")
-                port.write(fun.ACK)
-                numerBloku += 1
-                numerBloku %= 256  # bo numer bloku to liczba 8 bitowa - zakres 0-255
+                blad = [True, f"Nieznany sygnał: {sygnal}"]
+                continue
 
-    if blad[0]:
-        print("Anuluję transmisję: " + blad[1])
-        port.write(fun.CAN)
-        port.write(fun.CAN)
+        time.sleep(0.1)
 
-    else:  # jeśli wystąpi EOT
-        print("Przesyłam komunikat ACK, by zakończyć transmisję")
-        port.write(fun.ACK)
+    # Zapis danych do pliku po transmisji
+    if not blad[0] and odebrane_dane:
+        try:
+            with open(nazwa_pliku, 'wb') as plik:
+                plik.write(odebrane_dane)
+            print(f"Pomyślnie zapisano {len(odebrane_dane)} bajtów do pliku '{nazwa_pliku}'")
+        except Exception as e:
+            print(f"Błąd zapisu pliku: {str(e)}")
+    elif blad[0]:
+        print(f"Błąd transmisji: {blad[1]}")
+    else:
+        print("Nie odebrano żadnych danych")

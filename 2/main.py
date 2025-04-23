@@ -2,7 +2,9 @@ import serial
 import fun
 import odbior
 import wysylanie
+import os
 
+os.chdir(os.path.dirname(os.path.abspath(__file__)))
 print("Implementacja protokołu xModem")
 
 while 1:
@@ -19,10 +21,12 @@ while 1:
                 odbior.odbierzWiadomosc(serialPort)
                 break
 
+
             elif menu == 2:
                 print("Wybrano wysyłanie wiadomości.")
-                wiadomosc = input("Wprowadź wiadomość do wysłania: ")
-                wysylanie.wyslijWiadomosc(serialPort, wiadomosc)
+                nazwa_pliku = input("Podaj nazwę pliku do wysłania z rozszerzeniem: ")
+                wysylanie.wyslijWiadomosc(serialPort, nazwa_pliku)
+
                 break
 
             else:
