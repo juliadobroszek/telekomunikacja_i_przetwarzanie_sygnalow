@@ -10,6 +10,7 @@ class HuffmanEncoder:
         self.heap = []
         self.codes = {}
         self.reverse_mapping = {}
+        self.frequency = None
 
     class HeapNode:
         def __init__(self, char, freq):
@@ -27,10 +28,13 @@ class HuffmanEncoder:
             return self.freq == other.freq
 
     def make_frequency_dict(self, text):
-        frequency = defaultdict(int)
+        self.frequency = defaultdict(int)
         for character in text:
-            frequency[character] += 1
-        return frequency
+            self.frequency[character] += 1
+        return self.frequency
+
+    def get_frequency_stats(self):
+        return {char: (freq, self.codes.get(char, '')) for char, freq in self.frequency.items()}
 
     def make_heap(self, frequency):
         for key in frequency:
@@ -119,11 +123,13 @@ def send_file(filename, host='localhost', port=12345):
         encoder = HuffmanEncoder()
         compressed_data = encoder.compress(text)
         encoding_map = encoder.get_encoding_map()
+        frequency_stats = encoder.get_frequency_stats()
 
         data_to_send = {
             'compressed_data': compressed_data,
             'encoding_map': encoding_map,
-            'original_filename': filename
+            'original_filename': filename,
+            'frequency_stats': frequency_stats
         }
 
         serialized_data = pickle.dumps(data_to_send)

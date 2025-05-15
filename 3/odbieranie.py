@@ -64,7 +64,7 @@ def receive_file(host='localhost', port=12345):
                     print("Błąd: Nieprawidłowy format danych!")
                     return
 
-                required_keys = {'compressed_data', 'encoding_map', 'original_filename'}
+                required_keys = {'compressed_data', 'encoding_map', 'original_filename', 'frequency_stats'}
                 if not all(key in received_data for key in required_keys):
                     print("Błąd: Brak wymaganych danych w pakiecie!")
                     return
@@ -72,6 +72,7 @@ def receive_file(host='localhost', port=12345):
                 compressed_data = received_data['compressed_data']
                 encoding_map = received_data['encoding_map']
                 original_filename = received_data['original_filename']
+                frequency_stats = received_data['frequency_stats']
 
                 safe_filename = "".join(c for c in original_filename if c.isalnum() or c in (' ', '.', '_', '-'))
                 base, ext = os.path.splitext(safe_filename)
@@ -93,21 +94,27 @@ def receive_file(host='localhost', port=12345):
                 try:
                     with open(output_path, 'w', encoding='utf-8') as file:
                         file.write(decompressed_text)
-                    print(f"\nPlik został pomyślnie zapisany jako:\n{output_path}")
+                    # print(f"\nPlik został pomyślnie zapisany jako:\n{output_path}")
 
                     original_size = len(compressed_data)
                     decompressed_size = len(decompressed_text.encode('utf-8'))
                     ratio = (original_size / decompressed_size) * 100
 
-                    print("\nStatystyki:")
-                    print(f"Rozmiar skompresowany: {original_size} bajtów")
-                    print(f"Rozmiar po dekompresji: {decompressed_size} bajtów")
-                    print(f"Stopień kompresji: {ratio:.2f}%")
+                    print("{:<10} {:<15} {}".format("Znak", "Częstotliwość", "Kod Huffmana"))
+                    print("-" * 35)
 
-                    print("\nSłownik kodowy Huffmana:")
-                    for char, code in sorted(encoding_map.items(), key=lambda x: len(x[1])):
-                        char_repr = repr(char)[1:-1] if not char.isprintable() else char
-                        print(f"'{char_repr}': {code}")
+                    for char, (freq, code) in sorted(frequency_stats.items(), key=lambda x: x[1][0], reverse=True):
+                        char_display = f"'{char}'" if char.isprintable() and char != ' ' else repr(char)
+                        print("{:<10} {:<15} {}".format(
+                            char_display,
+                            freq,
+                            code
+                        ))
+
+                    # print("\nSłownik kodowy Huffmana:")
+                    # for char, code in sorted(encoding_map.items(), key=lambda x: len(x[1])):
+                    #     char_repr = repr(char)[1:-1] if not char.isprintable() else char
+                    #     print(f"'{char_repr}': {code}")
 
                 except PermissionError:
                     print(f"Błąd: Brak uprawnień do zapisu w folderze programu!")
